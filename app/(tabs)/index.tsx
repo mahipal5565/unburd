@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { MessageCircle, Heart, Sparkles, Star, Zap, Shield } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { usePremium } from '@/hooks/usePremium';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const testimonials = [
   {
@@ -59,12 +58,10 @@ const testimonials = [
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { premiumFeatures } = usePremium();
   
   const breathingScale = useSharedValue(1);
   const opacity = useSharedValue(0);
   const sparkleRotation = useSharedValue(0);
-  const floatingY = useSharedValue(0);
 
   useEffect(() => {
     // Breathing animation
@@ -98,22 +95,6 @@ export default function HomeScreen() {
       -1,
       false
     );
-
-    // Floating animation
-    floatingY.value = withRepeat(
-      withSequence(
-        withTiming(-10, {
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-        }),
-        withTiming(10, {
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-        })
-      ),
-      -1,
-      false
-    );
   }, []);
 
   const breathingAnimatedStyle = useAnimatedStyle(() => {
@@ -134,17 +115,11 @@ export default function HomeScreen() {
     };
   });
 
-  const floatingAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ translateY: floatingY.value }],
-    };
-  });
-
   const handleStartVenting = () => {
     router.push('/chat');
   };
 
-  const renderTestimonial = (testimonial: typeof testimonials[0], index: number) => (
+  const renderTestimonial = (testimonial: typeof testimonials[0]) => (
     <View key={testimonial.id} style={styles.testimonialCard}>
       <Image
         source={{ uri: testimonial.image }}
@@ -249,16 +224,9 @@ export default function HomeScreen() {
                 snapToInterval={width - 80}
                 decelerationRate="fast"
               >
-                {testimonials.map((testimonial, index) => renderTestimonial(testimonial, index))}
+                {testimonials.map((testimonial) => renderTestimonial(testimonial))}
               </ScrollView>
             </View>
-
-            {/* AdMob Banner Placeholder */}
-            {!premiumFeatures.adFree && (
-              <View style={styles.adContainer}>
-                <Text style={styles.adPlaceholder}>AdMob Banner</Text>
-              </View>
-            )}
           </Animated.View>
         </ScrollView>
       </LinearGradient>
@@ -463,20 +431,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Inter-Medium',
     color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-  },
-  adContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  adPlaceholder: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
   },
 });

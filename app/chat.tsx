@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Send, Mic, MicOff, MessageCircle, Smile, Sparkles, Heart as ThoughtBubble } from 'lucide-react-native';
+import { ArrowLeft, Send, MessageCircle, Smile, Sparkles, Heart } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,10 +23,8 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { usePremium } from '@/hooks/usePremium';
-import { geminiService } from '@/services/geminiService';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 interface Message {
   id: string;
@@ -44,9 +42,16 @@ interface MoodOption {
   color: string;
 }
 
+const fallbackResponses = [
+  "I hear you, and I want you to know that your feelings are completely valid. Thank you for sharing with me.",
+  "It takes courage to express what you're going through. I'm here to listen and support you.",
+  "Your emotions matter, and it's okay to feel whatever you're feeling right now. You're not alone.",
+  "I appreciate you opening up. Sometimes just putting our thoughts into words can be healing.",
+  "Thank you for trusting me with your feelings. You're being so brave by reaching out."
+];
+
 export default function ChatScreen() {
   const router = useRouter();
-  const { isPremium, premiumFeatures } = usePremium();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -56,15 +61,10 @@ export default function ChatScreen() {
     },
   ]);
   const [inputText, setInputText] = useState('');
-  const [isListening, setIsListening] = useState(false);
   const [showMoodOptions, setShowMoodOptions] = useState(false);
-  const [sessionStartTime] = useState(new Date());
-  const [sessionDuration, setSessionDuration] = useState(0);
   const [isAITyping, setIsAITyping] = useState(false);
-  const [isGeneratingResponse, setIsGeneratingResponse] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const textInputRef = useRef<TextInput>(null);
-  const pulseScale = useSharedValue(1);
   const typingOpacity = useSharedValue(0.3);
 
   const moodOptions: MoodOption[] = [
@@ -86,12 +86,11 @@ export default function ChatScreen() {
       id: 'reflect',
       text: 'Help me reflect',
       action: 'reflect',
-      icon: <ThoughtBubble size={20} color="#B19CD9" strokeWidth={2} />,
+      icon: <Heart size={20} color="#B19CD9" strokeWidth={2} />,
       color: '#B19CD9',
     },
   ];
 
-  // Auto-scroll to bottom when messages change or keyboard appears
   const scrollToBottom = (animated: boolean = true) => {
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated });
@@ -99,15 +98,6 @@ export default function ChatScreen() {
   };
 
   useEffect(() => {
-    pulseScale.value = withRepeat(
-      withTiming(1.1, {
-        duration: 2000,
-        easing: Easing.inOut(Easing.ease),
-      }),
-      -1,
-      true
-    );
-
     // Typing indicator animation
     typingOpacity.value = withRepeat(
       withTiming(1, {
@@ -117,27 +107,11 @@ export default function ChatScreen() {
       -1,
       true
     );
-
-    // Track session duration
-    const interval = setInterval(() => {
-      const currentTime = new Date();
-      const duration = (currentTime.getTime() - sessionStartTime.getTime()) / 1000 / 60;
-      setSessionDuration(duration);
-    }, 60000); // Update every minute
-
-    return () => clearInterval(interval);
   }, []);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  const pulseAnimatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: pulseScale.value }],
-    };
-  });
 
   const typingAnimatedStyle = useAnimatedStyle(() => {
     return {
@@ -145,35 +119,14 @@ export default function ChatScreen() {
     };
   });
 
-  // Get conversation history for context
-  const getConversationHistory = (): { text: string; isUser: boolean }[] => {
-    return messages
-      .filter(msg => !msg.isTyping && msg.text.trim() !== '')
-      .map(msg => ({
-        text: msg.text,
-        isUser: msg.isUser
-      }));
-  };
-
-  const generateAIResponse = async (userMessage: string): Promise<string> => {
-    try {
-      setIsGeneratingResponse(true);
-      const conversationHistory = getConversationHistory();
-      const response = await geminiService.generateResponse(userMessage, conversationHistory);
-      return response;
-    } catch (error) {
-      console.error('Error generating AI response:', error);
-      // Fallback response
-      return "I'm here with you, and I want you to know that your feelings are completely valid. Sometimes I need a moment to find the right words, but please know that I'm listening with care. 💜";
-    } finally {
-      setIsGeneratingResponse(false);
-    }
+  const generateResponse = (userMessage: string): string => {
+    const randomIndex = Math.floor(Math.random() * fallbackResponses.length);
+    return fallbackResponses[randomIndex];
   };
 
   const simulateTypingResponse = async (userMessage: string, messageId: string) => {
     setIsAITyping(true);
     
-    // Add typing indicator message
     const typingMessage: Message = {
       id: messageId,
       text: '',
@@ -184,68 +137,27 @@ export default function ChatScreen() {
     
     setMessages(prev => [...prev, typingMessage]);
 
-    try {
-      // Generate AI response
-      const responseText = await generateAIResponse(userMessage);
-      
-      // Simulate realistic typing delay based on response length
-      const typingDelay = Math.min(Math.max(responseText.length * 30, 1500), 4000);
+    const responseText = generateResponse(userMessage);
+    const typingDelay = Math.min(Math.max(responseText.length * 30, 1500), 4000);
+    
+    setTimeout(() => {
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, text: responseText, isTyping: false }
+            : msg
+        )
+      );
+      setIsAITyping(false);
       
       setTimeout(() => {
-        // Replace typing message with actual response
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === messageId 
-              ? { ...msg, text: responseText, isTyping: false }
-              : msg
-          )
-        );
-        setIsAITyping(false);
-        
-        // Keep focus on input after AI responds (like WhatsApp)
-        setTimeout(() => {
-          textInputRef.current?.focus();
-        }, 300);
-      }, typingDelay);
-      
-    } catch (error) {
-      console.error('Error in typing simulation:', error);
-      // Handle error case
-      setTimeout(() => {
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === messageId 
-              ? { 
-                  ...msg, 
-                  text: "I'm having a moment of difficulty, but I'm still here for you. Your feelings matter, and I want to support you through this. 💜", 
-                  isTyping: false 
-                }
-              : msg
-          )
-        );
-        setIsAITyping(false);
-        setTimeout(() => {
-          textInputRef.current?.focus();
-        }, 300);
-      }, 1500);
-    }
+        textInputRef.current?.focus();
+      }, 300);
+    }, typingDelay);
   };
 
   const handleSendMessage = () => {
-    if (inputText.trim() === '' || isAITyping || isGeneratingResponse) return;
-
-    // Check session limits for free users
-    if (!isPremium && sessionDuration >= 10) {
-      Alert.alert(
-        'Session Limit Reached',
-        'Free users can chat for 10 minutes. Upgrade to PRO for unlimited sessions.',
-        [
-          { text: 'Maybe Later', style: 'cancel' },
-          { text: 'Upgrade Now', onPress: () => router.push('/(tabs)/settings') },
-        ]
-      );
-      return;
-    }
+    if (inputText.trim() === '' || isAITyping) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -258,12 +170,10 @@ export default function ChatScreen() {
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
 
-    // Keep keyboard open and maintain focus (like WhatsApp)
     setTimeout(() => {
       textInputRef.current?.focus();
     }, 50);
 
-    // Generate AI response with typing simulation
     const aiMessageId = (Date.now() + 1).toString();
     simulateTypingResponse(currentInput, aiMessageId);
   };
@@ -274,7 +184,6 @@ export default function ChatScreen() {
     const messageId = Date.now().toString();
     setIsAITyping(true);
     
-    // Add typing indicator
     const typingMessage: Message = {
       id: messageId,
       text: '',
@@ -285,72 +194,41 @@ export default function ChatScreen() {
     
     setMessages(prev => [...prev, typingMessage]);
 
-    try {
-      // Generate mood-specific response using Gemini
-      const conversationHistory = getConversationHistory();
-      const responseText = await geminiService.generateMoodResponse(option.action, conversationHistory);
+    const fallbacks = {
+      better: "I'm so glad you're feeling better! 🌟 You've shown incredible strength and resilience today. Take care of yourself, and remember - I'm always here whenever you need support.",
+      distract: "Here's something beautiful to think about: Every small step you take toward healing matters, even when you can't see the progress. You're doing better than you know. ✨",
+      reflect: "Looking at our conversation, I see someone who had the courage to reach out and be honest about their feelings. That vulnerability is actually a sign of tremendous strength. 💜"
+    };
+    
+    const typingDelay = 1500;
+    
+    setTimeout(() => {
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, text: fallbacks[option.action], isTyping: false }
+            : msg
+        )
+      );
+      setIsAITyping(false);
       
-      // Simulate typing delay
-      const typingDelay = Math.min(Math.max(responseText.length * 25, 1200), 3000);
-      
-      setTimeout(() => {
-        // Replace typing message with actual response
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === messageId 
-              ? { ...msg, text: responseText, isTyping: false }
-              : msg
-          )
-        );
-        setIsAITyping(false);
-        
-        // Handle special case for "better" option
-        if (option.action === 'better') {
-          setTimeout(() => {
-            Alert.alert(
-              'Session Complete',
-              'Take a deep breath and carry this feeling with you. You did great today. 💜',
-              [{ text: 'Thank You', onPress: () => router.back() }]
-            );
-          }, 3000);
-        }
-      }, typingDelay);
-      
-    } catch (error) {
-      console.error('Error generating mood response:', error);
-      
-      // Fallback responses
-      const fallbacks = {
-        better: "I'm so glad you're feeling better! 🌟 You've shown incredible strength and resilience today. Take care of yourself, and remember - I'm always here whenever you need support.",
-        distract: "Here's something beautiful to think about: Every small step you take toward healing matters, even when you can't see the progress. You're doing better than you know. ✨",
-        reflect: "Looking at our conversation, I see someone who had the courage to reach out and be honest about their feelings. That vulnerability is actually a sign of tremendous strength. 💜"
-      };
-      
-      setTimeout(() => {
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === messageId 
-              ? { ...msg, text: fallbacks[option.action], isTyping: false }
-              : msg
-          )
-        );
-        setIsAITyping(false);
-      }, 1500);
-    }
-  };
-
-  const toggleListening = () => {
-    setIsListening(!isListening);
-    if (!isListening) {
-      Alert.alert('Voice Input', 'Voice input would be implemented here with speech-to-text API');
-    }
+      if (option.action === 'better') {
+        setTimeout(() => {
+          Alert.alert(
+            'Session Complete',
+            'Take a deep breath and carry this feeling with you. You did great today. 💜',
+            [{ text: 'Thank You', onPress: () => router.back() }]
+          );
+        }, 3000);
+      }
+    }, typingDelay);
   };
 
   const renderTypingIndicator = () => (
     <View style={styles.typingContainer}>
       <Animated.View style={[styles.typingDot, typingAnimatedStyle]} />
-      <Animated.View style={[styles.typingDot, typingAnimatedStyle, { animationDelay: 200 }]} />
-      <Animated.View style={[styles.typingDot, typingAnimatedStyle, { animationDelay: 400 }]} />
+      <Animated.View style={[styles.typingDot, typingAnimatedStyle]} />
+      <Animated.View style={[styles.typingDot, typingAnimatedStyle]} />
     </View>
   );
 
@@ -370,35 +248,27 @@ export default function ChatScreen() {
           <View style={styles.headerCenter}>
             <Text style={styles.headerText}>Unburden AI</Text>
             <Text style={styles.headerSubtext}>
-              {isAITyping ? 'Thinking...' : isGeneratingResponse ? 'Processing...' : 'Your safe space'}
+              {isAITyping ? 'Thinking...' : 'Your safe space'}
             </Text>
           </View>
           <View style={styles.sessionInfo}>
-            <Text style={styles.sessionText}>
-              {isPremium ? '∞' : `${Math.max(0, 10 - Math.floor(sessionDuration))}m`}
-            </Text>
+            <Text style={styles.sessionText}>∞</Text>
           </View>
         </View>
       </LinearGradient>
 
-      {/* Chat Container with Keyboard Avoiding View */}
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
         <View style={styles.chatContainer}>
-          {/* Messages */}
           <ScrollView
             ref={scrollViewRef}
             style={styles.messagesContainer}
             contentContainerStyle={styles.messagesContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            maintainVisibleContentPosition={{
-              minIndexForVisible: 0,
-              autoscrollToTopThreshold: 10,
-            }}
           >
             {messages.map((message) => (
               <View
@@ -429,77 +299,58 @@ export default function ChatScreen() {
                 </View>
               </View>
             ))}
-            {/* Extra padding to ensure last message is always visible */}
             <View style={styles.bottomSpacer} />
           </ScrollView>
 
-          {/* Input Container */}
           <View style={styles.inputContainer}>
             <View style={styles.inputContent}>
-              {/* How are you feeling button */}
               <TouchableOpacity
-                style={[styles.moodButton, (isAITyping || isGeneratingResponse) && styles.disabledButton]}
-                onPress={() => !(isAITyping || isGeneratingResponse) && setShowMoodOptions(true)}
-                disabled={isAITyping || isGeneratingResponse}
+                style={[styles.moodButton, isAITyping && styles.disabledButton]}
+                onPress={() => !isAITyping && setShowMoodOptions(true)}
+                disabled={isAITyping}
                 activeOpacity={0.8}
               >
                 <View style={styles.moodButtonContent}>
-                  <MessageCircle size={18} color={(isAITyping || isGeneratingResponse) ? '#9CA3AF' : '#B19CD9'} strokeWidth={2} />
-                  <Text style={[styles.moodButtonText, (isAITyping || isGeneratingResponse) && styles.disabledText]}>
+                  <MessageCircle size={18} color={isAITyping ? '#9CA3AF' : '#B19CD9'} strokeWidth={2} />
+                  <Text style={[styles.moodButtonText, isAITyping && styles.disabledText]}>
                     How are you feeling?
                   </Text>
                 </View>
               </TouchableOpacity>
 
-              {/* Input Row */}
               <View style={styles.inputRow}>
-                <View style={[styles.textInputContainer, (isAITyping || isGeneratingResponse) && styles.disabledInputContainer]}>
+                <View style={[styles.textInputContainer, isAITyping && styles.disabledInputContainer]}>
                   <TextInput
                     ref={textInputRef}
-                    style={[styles.textInput, (isAITyping || isGeneratingResponse) && styles.disabledText]}
+                    style={[styles.textInput, isAITyping && styles.disabledText]}
                     value={inputText}
                     onChangeText={setInputText}
-                    placeholder={(isAITyping || isGeneratingResponse) ? "Please wait..." : "Share what's on your mind..."}
-                    placeholderTextColor={(isAITyping || isGeneratingResponse) ? '#D1D5DB' : '#9CA3AF'}
+                    placeholder={isAITyping ? "Please wait..." : "Share what's on your mind..."}
+                    placeholderTextColor={isAITyping ? '#D1D5DB' : '#9CA3AF'}
                     multiline
                     maxLength={500}
                     returnKeyType="send"
                     onSubmitEditing={handleSendMessage}
                     blurOnSubmit={false}
-                    editable={!(isAITyping || isGeneratingResponse)}
+                    editable={!isAITyping}
                     onFocus={() => scrollToBottom()}
                     autoFocus={false}
                   />
                 </View>
                 
                 <TouchableOpacity
-                  style={[styles.micButton, (isAITyping || isGeneratingResponse) && styles.disabledButton]}
-                  onPress={toggleListening}
-                  disabled={isAITyping || isGeneratingResponse}
-                  activeOpacity={0.7}
-                >
-                  {isListening ? (
-                    <Animated.View style={pulseAnimatedStyle}>
-                      <MicOff size={22} color="#FF6B6B" strokeWidth={2} />
-                    </Animated.View>
-                  ) : (
-                    <Mic size={22} color={(isAITyping || isGeneratingResponse) ? '#D1D5DB' : '#6B7280'} strokeWidth={2} />
-                  )}
-                </TouchableOpacity>
-                
-                <TouchableOpacity
                   style={[
                     styles.sendButton,
-                    inputText.trim() && !(isAITyping || isGeneratingResponse) ? styles.sendButtonActive : null,
-                    (isAITyping || isGeneratingResponse) && styles.disabledButton,
+                    inputText.trim() && !isAITyping ? styles.sendButtonActive : null,
+                    isAITyping && styles.disabledButton,
                   ]}
                   onPress={handleSendMessage}
-                  disabled={inputText.trim() === '' || isAITyping || isGeneratingResponse}
+                  disabled={inputText.trim() === '' || isAITyping}
                   activeOpacity={0.8}
                 >
                   <Send
                     size={18}
-                    color={inputText.trim() && !(isAITyping || isGeneratingResponse) ? '#FFFFFF' : '#9CA3AF'}
+                    color={inputText.trim() && !isAITyping ? '#FFFFFF' : '#9CA3AF'}
                     strokeWidth={2}
                   />
                 </TouchableOpacity>
@@ -740,16 +591,6 @@ const styles = StyleSheet.create({
     minHeight: 20,
     textAlignVertical: 'center',
     lineHeight: 22,
-  },
-  micButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   sendButton: {
     width: 44,
