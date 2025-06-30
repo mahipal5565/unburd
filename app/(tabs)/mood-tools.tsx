@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Wind, Heart, Quote, RefreshCcw, CheckCircle, Circle, Sparkles } from 'lucide-react-native';
+import { Wind, Heart, Quote, RefreshCcw, CircleCheck as CheckCircle, Circle, Sparkles } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

@@ -10,15 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  Settings as SettingsIcon, 
-  Shield, 
-  HelpCircle, 
-  ExternalLink, 
-  Trash2,
-  Star,
-  Heart
-} from 'lucide-react-native';
+import { Settings as SettingsIcon, Shield, CircleHelp as HelpCircle, ExternalLink, Trash2, Star, Heart } from 'lucide-react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
